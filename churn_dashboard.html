@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Telco Customer Churn Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#5d6672;--bd:#e1e5ea;--a:#4c72b0;--r:#c44e52;--g:#55a868;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171b;--card:#1d2127;--tx:#e8eaed;--mut:#9aa3ae;--bd:#2c323a}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:0 0 4px}p.s{color:var(--mut);margin:0 0 12px;font-size:13px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}.k{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:16px 0}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;min-width:0}.kv{font-size:26px;font-weight:700}.kl{color:var(--mut);font-size:12px}
+select,button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;cursor:pointer}
+button.on{background:var(--a);color:#fff;border-color:var(--a)}.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.ch{position:relative;height:280px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:right}th:first-child,td:first-child{text-align:left}
+.cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;font-size:13px;text-align:center;margin-top:8px}.cm div{padding:12px 6px;border-radius:6px}
+.tp{background:rgba(85,168,104,.28)}.tn{background:rgba(76,114,176,.28)}.er{background:rgba(196,78,82,.28)}.cm .h{color:var(--mut);padding:6px}
+.rec li{margin-bottom:6px}
+</style></head><body><main>
+<h1>Telco Customer Churn Dashboard</h1>
+<p class="s">IBM Telco dataset · 7,032 customers after dropping 11 blank TotalCharges rows · 80/20 stratified split · scores are on the 20% test set</p>
+<div class="k" id="kpi"></div>
+<div class="grid">
+ <div class="c"><h2>Who churns? (EDA)</h2><p class="s">Churn rate (%) by group; dashed line is the overall rate.</p>
+  <div class="row"><select id="cat"></select></div><div class="ch"><canvas id="eda"></canvas></div></div>
+ <div class="c"><h2>Model comparison</h2><p class="s">Test-set metrics at the default 0.5 cutoff.</p><div id="tbl"></div>
+  <div class="ch" style="height:200px;margin-top:10px"><canvas id="roc"></canvas></div></div>
+ <div class="c"><h2>Confusion matrix</h2><div class="row" id="mb"></div><div id="mm"></div><div id="cm" class="cm"></div></div>
+ <div class="c"><h2>What drives churn?</h2><div class="row"><button id="b1" class="on">Random forest importance</button><button id="b2">Logistic coefficients</button></div>
+  <p class="s" id="fnote"></p><div class="ch" style="height:330px"><canvas id="fi"></canvas></div></div>
+</div>
+<div class="c" style="margin-top:14px"><h2>Conclusion &amp; recommended actions</h2>
+<ul class="rec"><li><b>Biggest risk group:</b> month-to-month, fiber-optic customers in their first 6 months who pay by electronic check.</li>
+<li><b>Lock in contracts:</b> offer discounts to move month-to-month customers to 1–2 year plans (churn falls from 43% to 11% and 3%).</li>
+<li><b>Onboard early:</b> add check-ins and offers in months 0–6, when churn is about 53%.</li>
+<li><b>Bundle support:</b> pair tech support and online security with fiber plans; customers without tech support churn at 42% vs 15% with it.</li>
+<li><b>Autopay:</b> nudge electronic-check users to automatic payment.</li>
+<li><b>Model choice:</b> all three models score ROC-AUC of about 0.83–0.84. Use logistic regression or random forest to catch more churners (recall about 0.79), or gradient boosting for fewer false alarms (precision 0.63).</li></ul></div>
+<script>
+const D={"n": 7032, "churn": 26.6, "eda": {"Contract": {"labels": ["Month-to-month", "One year", "Two year"], "rate": [42.7, 11.3, 2.8], "n": [3875, 1472, 1685]}, "tenure_group": {"labels": ["0-6", "7-12", "13-24", "25-48", "49-72"], "rate": [53.3, 35.9, 28.7, 20.4, 9.5], "n": [1470, 705, 1024, 1594, 2239]}, "InternetService": {"labels": ["Fiber optic", "DSL", "No"], "rate": [41.9, 19.0, 7.4], "n": [3096, 2416, 1520]}, "PaymentMethod": {"labels": ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"], "rate": [45.3, 19.2, 16.7, 15.3], "n": [2365, 1604, 1542, 1521]}, "TechSupport": {"labels": ["No", "Yes", "No internet service"], "rate": [41.6, 15.2, 7.4], "n": [3472, 2040, 1520]}, "OnlineSecurity": {"labels": ["No", "Yes", "No internet service"], "rate": [41.8, 14.6, 7.4], "n": [3497, 2015, 1520]}, "PaperlessBilling": {"labels": ["Yes", "No"], "rate": [33.6, 16.4], "n": [4168, 2864]}, "SeniorCitizen": {"labels": ["Yes", "No"], "rate": [41.7, 23.7], "n": [1142, 5890]}, "Partner": {"labels": ["No", "Yes"], "rate": [33.0, 19.7], "n": [3639, 3393]}, "Dependents": {"labels": ["No", "Yes"], "rate": [31.3, 15.5], "n": [4933, 2099]}, "gender": {"labels": ["Female", "Male"], "rate": [27.0, 26.2], "n": [3483, 3549]}}, "models": {"Logistic Regression": {"acc": 0.727, "prec": 0.492, "rec": 0.791, "f1": 0.607, "auc": 0.835, "cm": [727, 306, 78, 296], "roc": [0.0, 0.165, 0.294, 0.43, 0.519, 0.591, 0.631, 0.668, 0.701, 0.725, 0.751, 0.77, 0.794, 0.821, 0.84, 0.853, 0.882, 0.893, 0.906, 0.928, 0.933, 0.947, 0.957, 0.965, 0.968, 0.973, 0.979, 0.987, 0.987, 0.989, 0.995, 0.995, 0.995, 0.995, 0.995, 0.997, 0.997, 0.997, 0.997, 1.0, 1.0]}, "Random Forest": {"acc": 0.746, "prec": 0.515, "rec": 0.791, "f1": 0.624, "auc": 0.833, "cm": [754, 279, 78, 296], "roc": [0.008, 0.246, 0.326, 0.417, 0.5, 0.567, 0.586, 0.663, 0.693, 0.735, 0.759, 0.791, 0.81, 0.834, 0.848, 0.864, 0.874, 0.89, 0.898, 0.912, 0.936, 0.947, 0.952, 0.963, 0.965, 0.968, 0.971, 0.973, 0.979, 0.979, 0.987, 0.992, 0.992, 0.992, 0.992, 0.992, 0.995, 0.995, 0.997, 1.0, 1.0]}, "Gradient Boosting": {"acc": 0.792, "prec": 0.631, "rec": 0.521, "f1": 0.571, "auc": 0.839, "cm": [919, 114, 179, 195], "roc": [0.019, 0.235, 0.316, 0.414, 0.497, 0.58, 0.639, 0.682, 0.701, 0.733, 0.767, 0.781, 0.81, 0.837, 0.85, 0.861, 0.882, 0.906, 0.92, 0.933, 0.941, 0.947, 0.949, 0.96, 0.965, 0.973, 0.976, 0.984, 0.995, 0.995, 0.995, 0.995, 0.995, 0.997, 0.997, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}}, "grid": [0.0, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75, 0.775, 0.8, 0.825, 0.85, 0.875, 0.9, 0.925, 0.95, 0.975, 1.0], "rf": {"l": ["Contract_Month-to-month", "tenure", "TotalCharges", "MonthlyCharges", "Contract_Two year", "OnlineSecurity_No", "TechSupport_No", "InternetService_Fiber optic", "PaymentMethod_Electronic check", "Contract_One year", "OnlineBackup_No", "InternetService_DSL"], "v": [0.136, 0.124, 0.099, 0.069, 0.067, 0.061, 0.047, 0.046, 0.036, 0.021, 0.018, 0.017]}, "lr": {"l": ["tenure", "Contract_Two year", "InternetService_DSL", "MultipleLines_No", "OnlineSecurity_Yes", "PaymentMethod_Bank transfer (automatic)", "TechSupport_Yes", "SeniorCitizen", "TechSupport_No", "OnlineSecurity_No", "PaymentMethod_Electronic check", "InternetService_Fiber optic", "Contract_Month-to-month", "TotalCharges"], "v": [-2.98, -0.73, -0.36, -0.2, -0.16, -0.15, -0.14, 0.2, 0.22, 0.25, 0.27, 0.45, 0.76, 1.42]}};
+const cs=getComputedStyle(document.documentElement);let TX=cs.getPropertyValue('--tx'),MU=cs.getPropertyValue('--mut');
+Chart.defaults.color=MU.trim()||'#666';Chart.defaults.borderColor='rgba(128,128,128,.2)';
+const A='#4c72b0',R='#c44e52',G='#55a868',M=Object.keys(D.models);
+const best=M.reduce((a,b)=>D.models[b].auc>D.models[a].auc?b:a);
+document.getElementById('kpi').innerHTML=[[D.n.toLocaleString(),'Customers'],[D.churn+'%','Overall churn rate'],[D.models[best].auc,'Best ROC-AUC ('+best+')'],[D.models['Random Forest'].rec,'Random forest recall']].map(x=>`<div class="c"><div class="kv">${x[0]}</div><div class="kl">${x[1]}</div></div>`).join('');
+// EDA
+const sel=document.getElementById('cat');Object.keys(D.eda).forEach(k=>sel.add(new Option(k.replace('_',' '),k)));
+let ec=new Chart(document.getElementById('eda'),{type:'bar',data:{labels:[],datasets:[{label:'Churn rate (%)',data:[],backgroundColor:R}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:c=>'Customers: '+D.eda[sel.value].n[c.dataIndex]}}},scales:{y:{beginAtZero:true,title:{display:true,text:'Churn rate (%)'}}}}});
+function eda(){const d=D.eda[sel.value];ec.data.labels=d.labels;ec.data.datasets[0].data=d.rate;ec.data.datasets[1]=undefined;ec.data.datasets=[ec.data.datasets[0],{type:'line',label:'Overall',data:d.labels.map(_=>D.churn),borderColor:MU.trim()||'#888',borderDash:[6,4],pointRadius:0}];ec.update()}
+sel.onchange=eda;eda();
+// table
+document.getElementById('tbl').innerHTML='<table><tr><th>Model</th><th>Acc</th><th>Prec</th><th>Recall</th><th>F1</th><th>AUC</th></tr>'+M.map(m=>{const o=D.models[m];return `<tr><td>${m}</td><td>${o.acc}</td><td>${o.prec}</td><td>${o.rec}</td><td>${o.f1}</td><td>${o.auc}</td></tr>`}).join('')+'</table>';
+const cols=[A,R,G];
+new Chart(document.getElementById('roc'),{type:'line',data:{labels:D.grid,datasets:M.map((m,i)=>({label:m+' ('+D.models[m].auc+')',data:D.models[m].roc,borderColor:cols[i],pointRadius:0,borderWidth:2})).concat([{label:'Random',data:D.grid,borderColor:'#999',borderDash:[5,4],pointRadius:0,borderWidth:1}])},options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'ROC curve'},legend:{labels:{boxWidth:10,font:{size:11}}}},scales:{x:{title:{display:true,text:'False positive rate'},ticks:{maxTicksLimit:6}},y:{title:{display:true,text:'True positive rate'}}}}});
+// confusion
+const mb=document.getElementById('mb');
+function cm(m){[...mb.children].forEach(b=>b.classList.toggle('on',b.textContent===m));const [tn,fp,fn,tp]=D.models[m].cm;
+document.getElementById('mm').innerHTML=`<p class="s">${m}: catches ${tp} of ${tp+fn} churners (recall ${D.models[m].rec}); ${fp} loyal customers wrongly flagged.</p>`;
+document.getElementById('cm').innerHTML=`<div class="h"></div><div class="h">Predicted: Stayed</div><div class="h">Predicted: Churned</div><div class="h">Actual: Stayed</div><div class="tn"><b>${tn}</b><br>correct</div><div class="er"><b>${fp}</b><br>false alarm</div><div class="h">Actual: Churned</div><div class="er"><b>${fn}</b><br>missed</div><div class="tp"><b>${tp}</b><br>caught</div>`}
+M.forEach(m=>{const b=document.createElement('button');b.textContent=m;b.onclick=()=>cm(m);mb.appendChild(b)});cm('Random Forest');
+// importance
+let fc=new Chart(document.getElementById('fi'),{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:[]}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:11}}}}}});
+function fi(w){document.getElementById('b1').classList.toggle('on',w==1);document.getElementById('b2').classList.toggle('on',w==2);
+const d=w==1?D.rf:D.lr;fc.data.labels=d.l;fc.data.datasets[0].data=d.v;fc.data.datasets[0].backgroundColor=w==1?d.v.map(_=>A):d.v.map(v=>v>0?R:A);fc.update();
+document.getElementById('fnote').textContent=w==1?'Longer bar = the forest relies on that feature more to separate churners from stayers.':'Red raises churn, blue lowers it. Tenure and TotalCharges are correlated, so read their signs together, not separately.'}
+document.getElementById('b1').onclick=()=>fi(1);document.getElementById('b2').onclick=()=>fi(2);fi(1);
+</script></main></body></html>
